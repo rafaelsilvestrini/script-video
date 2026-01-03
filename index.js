@@ -60,11 +60,16 @@ async function detectLargeBlock(
       if (gray < 255 - pixelThreshold) binary[y][x] = 1;
     }
   }
-  const visited = Array.from({ length: height }, () => Array(width).fill(false));
+  const visited = Array.from({ length: height }, () =>
+    Array(width).fill(false)
+  );
   const blocks = [];
   function bfs(sy, sx) {
     const queue = [[sy, sx]];
-    let minY = sy, maxY = sy, minX = sx, maxX = sx;
+    let minY = sy,
+      maxY = sy,
+      minX = sx,
+      maxX = sx;
     visited[sy][sx] = true;
     while (queue.length) {
       const [y, x] = queue.shift();
@@ -73,8 +78,10 @@ async function detectLargeBlock(
           const ny = y + dy;
           const nx = x + dx;
           if (
-            ny >= 0 && ny < height &&
-            nx >= 0 && nx < width &&
+            ny >= 0 &&
+            ny < height &&
+            nx >= 0 &&
+            nx < width &&
             !visited[ny][nx] &&
             binary[ny][nx] === 1
           ) {
@@ -91,7 +98,14 @@ async function detectLargeBlock(
     const blockWidth = maxX - minX + 1;
     const blockHeight = maxY - minY + 1;
     if (blockWidth >= minBlockSize && blockHeight >= minBlockSize) {
-      blocks.push({ minY, maxY, minX, maxX, width: blockWidth, height: blockHeight });
+      blocks.push({
+        minY,
+        maxY,
+        minX,
+        maxX,
+        width: blockWidth,
+        height: blockHeight,
+      });
     }
   }
   for (let y = 0; y < height; y++) {
@@ -186,7 +200,11 @@ async function overlayMultipleTexts(inputVideo, outputVideo, texts, fontPath) {
       .replace(/'/g, "\\\\'")
       .replace(/:/g, "\\:")
       .replace(/,/g, "\\,");
-    return `drawtext=fontfile='${fontPath}':text='${escapedText}':x=${t.x}:y=${t.y}:fontsize=${t.fontSize}:fontcolor=${t.fontColor}${t.box ? `:box=1:boxcolor=${t.boxColor}:boxborderw=5` : ""}`;
+    return `drawtext=fontfile='${fontPath}':text='${escapedText}':x=${t.x}:y=${
+      t.y
+    }:fontsize=${t.fontSize}:fontcolor=${t.fontColor}${
+      t.box ? `:box=1:boxcolor=${t.boxColor}:boxborderw=5` : ""
+    }`;
   });
   const filterComplex = drawtextFilters.join(",");
   const cmd = `"${ffmpegPath}" -y -i "${inputVideo}" -vf "${filterComplex}" -c:v libx264 -crf 18 -preset veryfast -c:a copy "${outputVideo}"`;
@@ -205,7 +223,6 @@ geq=r='255':g='255':b='255':a='if(lte(pow(X-32,2)+pow(Y-32,2),32*32),255,0)'[bor
 
   await run(cmd);
 }
-
 
 app.post("/process-video", async (req, res) => {
   const { data, text = "", text1 = "", debug = false } = req.body;
@@ -227,7 +244,14 @@ app.post("/process-video", async (req, res) => {
   const fontPath = path.join(__dirname, "HelveticaNeueMedium.otf");
   const logoFile = path.join(__dirname, "logo.png");
 
-  const tempFiles = [inputFile, tmpCrop, tmpMirror, tmpOverlay, frameFile, tmpLogo];
+  const tempFiles = [
+    inputFile,
+    tmpCrop,
+    tmpMirror,
+    tmpOverlay,
+    frameFile,
+    tmpLogo,
+  ];
 
   try {
     await saveBase64Video(data, inputFile);
@@ -236,7 +260,9 @@ app.post("/process-video", async (req, res) => {
     const detected = await detectLargeBlock(frameFile, 200, 60, debug);
 
     if (!detected || detected.height < 20 || detected.startY > 0.8 * 720) {
-      return res.status(400).json({ error: "Não foi detectado bloco válido para corte." });
+      return res
+        .status(400)
+        .json({ error: "Não foi detectado bloco válido para corte." });
     }
 
     await applyCrop(inputFile, tmpCrop, detected.startY);
@@ -257,20 +283,131 @@ app.post("/process-video", async (req, res) => {
     await overlayMultipleTexts(tmpLogo, finalFile, texts, fontPath);
 
     const finalBase64 = fs.readFileSync(finalFile).toString("base64");
-    const url = `${req.protocol}://${req.get("host")}/videos/${path.basename(finalFile)}`;
+    const url = `${req.protocol}://${req.get("host")}/videos/${path.basename(
+      finalFile
+    )}`;
     const debugUrl = debug
-      ? `${req.protocol}://${req.get("host")}/videos/${path.basename(debugFile)}`
+      ? `${req.protocol}://${req.get("host")}/videos/${path.basename(
+          debugFile
+        )}`
       : undefined;
 
-    tempFiles.forEach((f) => { if (fs.existsSync(f)) fs.unlinkSync(f); });
+    tempFiles.forEach((f) => {
+      if (fs.existsSync(f)) fs.unlinkSync(f);
+    });
     if (!debug && fs.existsSync(debugFile)) fs.unlinkSync(debugFile);
 
-    return res.json({ url, base64: finalBase64, debugUrl: debug ? debugUrl : undefined });
+    return res.json({
+      url,
+      base64: finalBase64,
+      debugUrl: debug ? debugUrl : undefined,
+    });
+  } catch (e) {
+    console.error(e);
+    return res
+      .status(500)
+      .json({ error: "Erro interno no processamento do vídeo.", details: e });
+  }
+});
+
+app.post("/tucano", async (req, res) => {
+  const {
+    text = "",
+    text1 = "",
+    marginLeft = 20,
+    marginRight = 20,
+    top = 20,
+    maxCharsPerLine = 40
+  } = req.body;
+
+  const uniqueName = generateUniqueName();
+  const outputDir = path.join(__dirname, "videotucano");
+  if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
+
+  const tmpFramesVideo = path.join(outputDir, `${uniqueName}-frames.mp4`);
+  const tmpVideoWithText = path.join(outputDir, `${uniqueName}-with-text.mp4`);
+  const finalFile = path.join(outputDir, `${uniqueName}-final.mp4`);
+
+  const bgImage = path.join(__dirname, "backgroundtucano.png");
+  const fontPath = path.join(__dirname, "HelveticaNeueMedium.otf");
+  const audioFile = path.join(__dirname, "tucano.mp3");
+
+  // Função para quebrar texto em linhas
+  function splitTextToLines(text, maxChars) {
+    const words = text.split(" ");
+    const lines = [];
+    let currentLine = "";
+    for (const word of words) {
+      if ((currentLine + " " + word).trim().length <= maxChars) {
+        currentLine = (currentLine + " " + word).trim();
+      } else {
+        if (currentLine) lines.push(currentLine);
+        currentLine = word;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+    return lines;
+  }
+
+  try {
+    // 1️⃣ Criar vídeo contínuo de 15s
+    const cmdFrames = `"${ffmpegPath}" -y -loop 1 -i "${bgImage}" -t 15 -r 25 -c:v libx264 -pix_fmt yuv420p "${tmpFramesVideo}"`;
+    await run(cmdFrames);
+
+    // 2️⃣ Preparar textos do body
+    const texts = [];
+    if (text.trim() !== "") texts.push({ text, top, marginLeft, marginRight, fontSize: 42, align: "left" });
+    if (text1.trim() !== "") texts.push({ text: text1, top, marginLeft, marginRight, fontSize: 28, align: "left" });
+
+    // 3️⃣ Aplicar drawtext
+    if (texts.length > 0) {
+      const drawtextFilters = [];
+
+      for (const t of texts) {
+        const lines = splitTextToLines(t.text, maxCharsPerLine);
+        let lineY = t.top;
+
+        for (const line of lines) {
+          const escapedText = line.replace(/\\/g, "\\\\\\\\").replace(/'/g, "\\\\'").replace(/:/g, "\\:").replace(/,/g, "\\,");
+
+          // x baseado no alinhamento (sempre usando margens do body)
+          const xExpr = t.align === "right"
+            ? `w-tw-${t.marginRight}`
+            : `${t.marginLeft}`;
+
+          drawtextFilters.push(`drawtext=fontfile='${fontPath}':text='${escapedText}':x=${xExpr}:y=${lineY}:fontsize=${t.fontSize}:fontcolor=white`);
+          lineY += t.fontSize + 10; // espaçamento entre linhas
+        }
+      }
+
+      const filterStr = drawtextFilters.join(",");
+      const cmdText = `"${ffmpegPath}" -y -i "${tmpFramesVideo}" -vf "${filterStr}" -c:v libx264 -crf 18 -preset veryfast -pix_fmt yuv420p "${tmpVideoWithText}"`;
+      await run(cmdText);
+    } else {
+      fs.copyFileSync(tmpFramesVideo, tmpVideoWithText);
+    }
+
+    // 4️⃣ Adicionar áudio de 15 segundos
+    const cmdAudio = `"${ffmpegPath}" -y -i "${tmpVideoWithText}" -i "${audioFile}" -c:v copy -c:a aac -b:a 192k -t 15 "${finalFile}"`;
+    await run(cmdAudio);
+
+    // 5️⃣ Limpar temporários
+    [tmpFramesVideo, tmpVideoWithText].forEach(f => { if (fs.existsSync(f)) fs.unlinkSync(f); });
+
+    // 6️⃣ Retornar vídeo final
+    const finalBase64 = fs.readFileSync(finalFile).toString("base64");
+    const url = `${req.protocol}://${req.get("host")}/videotucano/${path.basename(finalFile)}`;
+
+    return res.json({ url, base64: finalBase64 });
+
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Erro interno no processamento do vídeo.", details: e });
   }
 });
+
+
+
 
 app.listen(PORT, () => {
   console.log(`🎬 API de vídeo rodando em http://localhost:${PORT}`);
