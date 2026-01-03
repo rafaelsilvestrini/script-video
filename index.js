@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 1524;
 app.use(cors());
 app.use(express.json({ limit: "500mb" }));
 app.use("/videos", express.static(path.join(__dirname, "videos")));
-
+app.use('/videotucano', express.static(path.join(__dirname, 'videotucano')));
 function run(cmd) {
   return new Promise((resolve, reject) => {
     exec(cmd, { maxBuffer: 1024 * 1024 * 100 }, (err, stdout, stderr) => {
@@ -317,7 +317,7 @@ app.post("/tucano", async (req, res) => {
     marginLeft = 20,
     marginRight = 20,
     top = 20,
-    maxCharsPerLine = 40
+    maxCharsPerLine = 31  // Mudamos para 26, como pedido
   } = req.body;
 
   const uniqueName = generateUniqueName();
@@ -332,19 +332,23 @@ app.post("/tucano", async (req, res) => {
   const fontPath = path.join(__dirname, "HelveticaNeueMedium.otf");
   const audioFile = path.join(__dirname, "tucano.mp3");
 
-  // Função para quebrar texto em linhas
+  // Função para quebrar texto em linhas com base no limite de caracteres
   function splitTextToLines(text, maxChars) {
     const words = text.split(" ");
     const lines = [];
     let currentLine = "";
+
     for (const word of words) {
       if ((currentLine + " " + word).trim().length <= maxChars) {
         currentLine = (currentLine + " " + word).trim();
       } else {
-        if (currentLine) lines.push(currentLine);
+        if (currentLine) {
+          lines.push(currentLine);
+        }
         currentLine = word;
       }
     }
+
     if (currentLine) lines.push(currentLine);
     return lines;
   }
@@ -356,7 +360,7 @@ app.post("/tucano", async (req, res) => {
 
     // 2️⃣ Preparar textos do body
     const texts = [];
-    if (text.trim() !== "") texts.push({ text, top, marginLeft, marginRight, fontSize: 42, align: "left" });
+    if (text.trim() !== "") texts.push({ text, top, marginLeft, marginRight, fontSize: 60, align: "left" });
     if (text1.trim() !== "") texts.push({ text: text1, top, marginLeft, marginRight, fontSize: 28, align: "left" });
 
     // 3️⃣ Aplicar drawtext
@@ -370,13 +374,12 @@ app.post("/tucano", async (req, res) => {
         for (const line of lines) {
           const escapedText = line.replace(/\\/g, "\\\\\\\\").replace(/'/g, "\\\\'").replace(/:/g, "\\:").replace(/,/g, "\\,");
 
-          // x baseado no alinhamento (sempre usando margens do body)
           const xExpr = t.align === "right"
             ? `w-tw-${t.marginRight}`
             : `${t.marginLeft}`;
 
           drawtextFilters.push(`drawtext=fontfile='${fontPath}':text='${escapedText}':x=${xExpr}:y=${lineY}:fontsize=${t.fontSize}:fontcolor=white`);
-          lineY += t.fontSize + 10; // espaçamento entre linhas
+          lineY += t.fontSize + 10;
         }
       }
 
@@ -405,8 +408,6 @@ app.post("/tucano", async (req, res) => {
     return res.status(500).json({ error: "Erro interno no processamento do vídeo.", details: e });
   }
 });
-
-
 
 
 app.listen(PORT, () => {
