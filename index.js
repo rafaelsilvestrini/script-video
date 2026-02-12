@@ -10,212 +10,160 @@ const ffmpegPath = ffmpegInstaller.path;
 const app = express();
 const PORT = process.env.PORT || 1524;
 
+const DIRS = {
+    temp: path.join(__dirname, "temp_videos"),
+    output: path.join(__dirname, "output"),
+    assets: path.join(__dirname, "assets"),
+    img: path.join(__dirname, "assets", "img"),
+    fonts: path.join(__dirname, "assets", "fonts"),
+    audio: path.join(__dirname, "assets", "audio")
+};
+
+Object.values(DIRS).forEach(dir => {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+});
+
 app.use(cors());
 app.use(express.json({ limit: "500mb" }));
-app.use("/videos", express.static(path.join(__dirname, "videos")));
+app.use("/output", express.static(DIRS.output));
 
-// Função para executar comandos
 function run(cmd) {
-  return new Promise((resolve, reject) => {
-    exec(cmd, { maxBuffer: 1024 * 1024 * 100 }, (err, stdout, stderr) => {
-      if (err) return reject({ err, stdout, stderr });
-      resolve({ stdout, stderr });
+    return new Promise((resolve, reject) => {
+        exec(cmd, { maxBuffer: 1024 * 1024 * 50 }, (err, stdout, stderr) => {
+            if (err) return reject({ err, stdout, stderr });
+            resolve({ stdout, stderr });
+        });
     });
-  });
 }
 
-// Função para gerar nome único para os arquivos
 function generateUniqueName(base = "video") {
-  return `${base}-${crypto.randomBytes(8).toString("hex")}`;
+    return `${base}-${crypto.randomBytes(4).toString("hex")}`;
 }
 
-// Função para salvar o vídeo codificado em base64
 async function saveBase64Video(base64, filepath) {
-  const buffer = Buffer.from(base64, "base64");
-  fs.writeFileSync(filepath, buffer);
+    const buffer = Buffer.from(base64, "base64");
+    fs.writeFileSync(filepath, buffer);
 }
 
-// Função para sobrepor o vídeo com o fundo
 async function overlayOnBG(videoFile, bgFile, outputFile, topCrop) {
-  const cmd = `"${ffmpegPath}" -y -i "${bgFile}" -i "${videoFile}" -filter_complex "\
-[0:v]scale=1080:1080[bg];[1:v]scale=800:800[vid];[bg][vid]overlay=(W-w)/2:${topCrop}:format=auto[out]" \
--map "[out]" -map 1:a -c:v libx264 -crf 18 -preset veryfast -c:a mp3 -b:a 192k -ac 2 "${outputFile}"`;
-
-  await run(cmd); // Executa o comando para overlay
+    const cmd = `"${ffmpegPath}" -y -threads 1 -i "${bgImage}" -i "${videoFile}" -filter_complex "[0:v]scale=1080:1080[bg];[1:v]scale=800:800[vid];[bg][vid]overlay=(W-w)/2:${topCrop}:format=auto[out]" -map "[out]" -map 1:a -c:v libx264 -crf 23 -preset ultrafast -c:a mp3 -b:a 128k "${outputFile}"`;
+    await run(cmd);
 }
 
-// Rota para processar o vídeo
+async function smartCrop(inputFile, outputFile, debug = false) {
+    const probeCmd = `"${ffmpegPath}" -i "${inputFile}"`;
+    const { stderr: probeData } = await run(probeCmd).catch(e => e);
+    const dimMatch = probeData.match(/(\d+)x(\d+)/);
+    const width = dimMatch ? Number(dimMatch[1]) : 0;
+    const height = dimMatch ? Number(dimMatch[2]) : 0;
+
+    const detectCmd = `"${ffmpegPath}" -i "${inputFile}" -vf "edgedetect=low=0.1:high=0.4,cropdetect=limit=10:round=2" -t 1 -f null -`;
+    const { stderr } = await run(detectCmd);
+    const match = stderr.match(/crop=(\d+):(\d+):(\d+):(\d+)/);
+    
+    let dW, dH, dX, dY;
+    if (match) {
+        [_, dW, dH, dX, dY] = match.map(Number);
+        if (dY < 50 && dH > height * 0.9) { dY = Math.floor(height * 0.10); dH = Math.floor(height * 0.80); }
+        dY = Math.max(0, dY - 15); dH = Math.min(height - dY, dH + 30);
+    } else {
+        dY = Math.floor(height * 0.20); dH = Math.floor(height * 0.60); dX = 0; dW = width;
+    }
+
+    const maxSide = Math.max(dW, dH);
+    const filter = `crop=${dW}:${dH}:${dX}:${dY},pad=${maxSide}:${maxSide}:(ow-iw)/2:(oh-ih)/2:white`;
+
+    if (debug) {
+        const debugImg = path.join(DIRS.output, 'debug-linhas.png');
+        await run(`"${ffmpegPath}" -y -i "${inputFile}" -ss 1 -vf "drawbox=x=${dX}:y=${dY}:w=${dW}:h=${dH}:color=red:t=5" -vframes 1 "${debugImg}"`);
+    }
+
+    await run(`"${ffmpegPath}" -y -threads 1 -i "${inputFile}" -vf "${filter}" -c:v libx264 -crf 23 -preset ultrafast -c:a copy "${outputFile}"`);
+}
+
 app.post("/process-video", async (req, res) => {
-  const { data, top = 110, debug = false, text1 = null } = req.body; // Recebe o top (margem) via body
-  if (!data) return res.status(400).json({ error: "data é obrigatório." });
+    const { data, top = 110, text1 = "back.png", isCut = false, debug = false } = req.body;
+    if (!data) return res.status(400).json({ error: "sem dados" });
 
-  const uniqueName = generateUniqueName();
-  const tmpDir = path.join(__dirname, "videos");
-  if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir);
+    const uniqueName = generateUniqueName();
+    const inputFile = path.join(DIRS.temp, `${uniqueName}-in.mp4`);
+    const croppedFile = path.join(DIRS.temp, `${uniqueName}-cr.mp4`);
+    const finalFile = path.join(DIRS.output, `${uniqueName}-out.mp4`);
+    const bgImage = path.join(DIRS.img, text1);
 
-  const inputFile = path.join(tmpDir, `${uniqueName}-input.mp4`);
-  const tmpOverlay = path.join(tmpDir, `${uniqueName}-overlay.mp4`);
-  const finalFile = path.join(tmpDir, `${uniqueName}-final.mp4`);
-  const bgImage = path.join(__dirname, text1 || "back.png");
-  // Sua imagem de fundo
+    try {
+        await saveBase64Video(data, inputFile);
+        let videoSource = inputFile;
+        if (isCut) {
+            await smartCrop(inputFile, croppedFile, debug);
+            videoSource = croppedFile;
+        }
+        
+        const cmdOverlay = `"${ffmpegPath}" -y -threads 1 -i "${bgImage}" -i "${videoSource}" -filter_complex "[0:v]scale=1080:1080[bg];[1:v]scale=800:800[vid];[bg][vid]overlay=(W-w)/2:${top}:format=auto[out]" -map "[out]" -map 1:a -c:v libx264 -crf 23 -preset ultrafast -c:a mp3 -b:a 128k "${finalFile}"`;
+        await run(cmdOverlay);
 
-  try {
-    await saveBase64Video(data, inputFile); // Salva o vídeo enviado
-    await overlayOnBG(inputFile, bgImage, tmpOverlay, top); // Coloca o vídeo sobre a imagem de fundo
-
-    // Gerar o arquivo final com áudio em mp3
-    const cmdFinal = `"${ffmpegPath}" -y -i "${tmpOverlay}" -c:v libx264 -crf 18 -preset veryfast -c:a mp3 -b:a 192k -ac 2 "${finalFile}"`;
-    await run(cmdFinal); // Executa o comando final para gerar o vídeo com áudio
-
-    // Convertendo o vídeo final para base64
-    const finalBase64 = fs.readFileSync(finalFile).toString("base64");
-
-    // Gerando a URL do vídeo final
-    const url = `${req.protocol}://${req.get("host")}/videos/${path.basename(finalFile)}`;
-
-    // Limpeza de arquivos temporários
-    [inputFile, tmpOverlay].forEach((f) => {
-      if (fs.existsSync(f)) fs.unlinkSync(f);
-    });
-
-    return res.json({
-      url,
-      base64: finalBase64,
-      debugUrl: debug
-        ? `${req.protocol}://${req.get("host")}/videos/${path.basename(finalFile)}`
-        : undefined,
-    });
-  } catch (e) {
-    console.error(e);
-    return res
-      .status(500)
-      .json({ error: "Erro interno no processamento do vídeo.", details: e });
-  }
+        const finalBase64 = fs.readFileSync(finalFile).toString("base64");
+        const url = `${req.protocol}://${req.get("host")}/output/${path.basename(finalFile)}`;
+        
+        [inputFile, croppedFile].forEach(f => { if (fs.existsSync(f)) fs.unlinkSync(f); });
+        return res.json({ url, base64: finalBase64 });
+    } catch (e) {
+        [inputFile, croppedFile, finalFile].forEach(f => { if (f && fs.existsSync(f)) fs.unlinkSync(f); });
+        return res.status(500).send("Erro");
+    }
 });
 
 app.post("/tucano", async (req, res) => {
-  const {
-    text = "",
-    text1 = "",
-    marginLeft = 20,
-    marginRight = 20,
-    top = 20,
-    maxCharsPerLine = 31, // Mudamos para 26, como pedido
-  } = req.body;
+    const { text = "", text1 = "", marginLeft = 20, top = 20, maxCharsPerLine = 31 } = req.body;
+    const uniqueName = generateUniqueName("tucano");
+    const tmpFrames = path.join(DIRS.temp, `${uniqueName}-f.mp4`);
+    const tmpWithText = path.join(DIRS.temp, `${uniqueName}-t.mp4`);
+    const finalFile = path.join(DIRS.output, `${uniqueName}-res.mp4`);
+    const bgImage = path.join(DIRS.img, "backgroundtucano.png");
+    const fontPath = path.join(DIRS.fonts, "HelveticaNeueMedium.otf");
+    const audioFile = path.join(DIRS.audio, "tucano.mp3");
 
-  const uniqueName = generateUniqueName();
-  const outputDir = path.join(__dirname, "videotucano");
-  if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
-
-  const tmpFramesVideo = path.join(outputDir, `${uniqueName}-frames.mp4`);
-  const tmpVideoWithText = path.join(outputDir, `${uniqueName}-with-text.mp4`);
-  const finalFile = path.join(outputDir, `${uniqueName}-final.mp4`);
-
-  const bgImage = path.join(__dirname, "backgroundtucano.png");
-  const fontPath = path.join(__dirname, "HelveticaNeueMedium.otf");
-  const audioFile = path.join(__dirname, "tucano.mp3");
-
-  // Função para quebrar texto em linhas com base no limite de caracteres
-  function splitTextToLines(text, maxChars) {
-    const words = text.split(" ");
-    const lines = [];
-    let currentLine = "";
-
-    for (const word of words) {
-      if ((currentLine + " " + word).trim().length <= maxChars) {
-        currentLine = (currentLine + " " + word).trim();
-      } else {
-        if (currentLine) {
-          lines.push(currentLine);
+    function splitText(t, m) {
+        const words = t.split(" ");
+        const lines = [];
+        let cur = "";
+        for (const w of words) {
+            if ((cur + " " + w).trim().length <= m) cur = (cur + " " + w).trim();
+            else { if (cur) lines.push(cur); cur = w; }
         }
-        currentLine = word;
-      }
+        if (cur) lines.push(cur);
+        return lines;
     }
 
-    if (currentLine) lines.push(currentLine);
-    return lines;
-  }
+    try {
+        await run(`"${ffmpegPath}" -y -threads 1 -loop 1 -i "${bgImage}" -t 15 -r 24 -c:v libx264 -preset ultrafast -pix_fmt yuv420p "${tmpFrames}"`);
+        const texts = [];
+        if (text.trim()) texts.push({ text, top, fontSize: 60 });
+        if (text1.trim()) texts.push({ text: text1, top: top + 150, fontSize: 28 });
 
-  try {
-    // 1️⃣ Criar vídeo contínuo de 15s
-    const cmdFrames = `"${ffmpegPath}" -y -loop 1 -i "${bgImage}" -t 15 -r 25 -c:v libx264 -pix_fmt yuv420p "${tmpFramesVideo}"`;
-    await run(cmdFrames);
-
-    // 2️⃣ Preparar textos do body
-    const texts = [];
-    if (text.trim() !== "")
-      texts.push({
-        text,
-        top,
-        marginLeft,
-        marginRight,
-        fontSize: 60,
-        align: "left",
-      });
-    if (text1.trim() !== "")
-      texts.push({
-        text: text1,
-        top,
-        marginLeft,
-        marginRight,
-        fontSize: 28,
-        align: "left",
-      });
-
-    // 3️⃣ Aplicar drawtext
-    if (texts.length > 0) {
-      const drawtextFilters = [];
-
-      for (const t of texts) {
-        const lines = splitTextToLines(t.text, maxCharsPerLine);
-        let lineY = t.top;
-
-        for (const line of lines) {
-          const escapedText = line
-            .replace(/\\/g, "\\\\\\\\")
-            .replace(/'/g, "\\\\'")
-            .replace(/:/g, "\\:")
-            .replace(/,/g, "\\,");
-
-          const xExpr =
-            t.align === "right" ? `w-tw-${t.marginRight}` : `${t.marginLeft}`;
-
-          drawtextFilters.push(
-            `drawtext=fontfile='${fontPath}':text='${escapedText}':x=${xExpr}:y=${lineY}:fontsize=${t.fontSize}:fontcolor=white`,
-          );
-          lineY += t.fontSize + 10;
+        if (texts.length > 0) {
+            const filters = [];
+            texts.forEach(t => {
+                const lines = splitText(t.text, maxCharsPerLine);
+                let lineY = t.top;
+                lines.forEach(line => {
+                    const esc = line.replace(/\\/g, "\\\\\\\\").replace(/'/g, "\\\\'").replace(/:/g, "\\:").replace(/,/g, "\\,");
+                    filters.push(`drawtext=fontfile='${fontPath}':text='${esc}':x=${marginLeft}:y=${lineY}:fontsize=${t.fontSize}:fontcolor=white`);
+                    lineY += t.fontSize + 10;
+                });
+            });
+            await run(`"${ffmpegPath}" -y -threads 1 -i "${tmpFrames}" -vf "${filters.join(",")}" -c:v libx264 -crf 23 -preset ultrafast "${tmpWithText}"`);
+        } else {
+            fs.copyFileSync(tmpFrames, tmpWithText);
         }
-      }
-
-      const filterStr = drawtextFilters.join(",");
-      const cmdText = `"${ffmpegPath}" -y -i "${tmpFramesVideo}" -vf "${filterStr}" -c:v libx264 -crf 18 -preset veryfast -pix_fmt yuv420p "${tmpVideoWithText}"`;
-      await run(cmdText);
-    } else {
-      fs.copyFileSync(tmpFramesVideo, tmpVideoWithText);
+        await run(`"${ffmpegPath}" -y -threads 1 -i "${tmpWithText}" -i "${audioFile}" -c:v copy -c:a aac -b:a 128k -t 15 "${finalFile}"`);
+        
+        const base64 = fs.readFileSync(finalFile).toString("base64");
+        [tmpFrames, tmpWithText].forEach(f => { if (fs.existsSync(f)) fs.unlinkSync(f); });
+        return res.json({ url: `${req.protocol}://${req.get("host")}/output/${path.basename(finalFile)}`, base64 });
+    } catch (e) {
+        return res.status(500).send("Erro");
     }
-
-    // 4️⃣ Adicionar áudio de 15 segundos
-    const cmdAudio = `"${ffmpegPath}" -y -i "${tmpVideoWithText}" -i "${audioFile}" -c:v copy -c:a aac -b:a 192k -t 15 "${finalFile}"`;
-    await run(cmdAudio);
-
-    // 5️⃣ Limpar temporários
-    [tmpFramesVideo, tmpVideoWithText].forEach((f) => {
-      if (fs.existsSync(f)) fs.unlinkSync(f);
-    });
-
-    // 6️⃣ Retornar vídeo final
-    const finalBase64 = fs.readFileSync(finalFile).toString("base64");
-    const url = `${req.protocol}://${req.get("host")}/videotucano/${path.basename(finalFile)}`;
-
-    return res.json({ url, base64: finalBase64 });
-  } catch (e) {
-    console.error(e);
-    return res
-      .status(500)
-      .json({ error: "Erro interno no processamento do vídeo.", details: e });
-  }
 });
 
-app.listen(PORT, () => {
-  console.log(`🎬 API de vídeo rodando em http://localhost:${PORT}`);
-});
+app.listen(PORT);
