@@ -36,6 +36,30 @@ function run(cmd) {
     });
 }
 
+function logError(context, error) {
+    console.error(`[${context}] erro`);
+    if (error?.err) console.error(error.err);
+    if (error?.stderr) console.error(error.stderr);
+    if (error?.stdout) console.error(error.stdout);
+    if (!error?.err && !error?.stderr && !error?.stdout) console.error(error);
+}
+
+async function getVideoDimensions(inputFile) {
+    const probeCmd = `"${ffmpegPath}" -i "${inputFile}"`;
+    const { stderr: probeData } = await run(probeCmd).catch(e => e);
+    const dimMatch = probeData.match(/Video:.*?(\d{2,5})x(\d{2,5})/);
+    const width = dimMatch ? Number(dimMatch[1]) : 0;
+    const height = dimMatch ? Number(dimMatch[2]) : 0;
+    return { width, height };
+}
+
+function isReelsByAspect(width, height) {
+    if (!width || !height) return false;
+    const ratio = height / width;
+    const shortSide = Math.min(width, height);
+    return ratio >= 1.7 && ratio <= 1.85 && shortSide >= 720;
+}
+
 function generateUniqueName(base = "video") {
     return `${base}-${crypto.randomBytes(4).toString("hex")}`;
 }
@@ -93,6 +117,22 @@ app.post("/process-video", async (req, res) => {
 
     try {
         await saveBase64Video(data, inputFile);
+        const { width, height } = await getVideoDimensions(inputFile);
+        const ratio = width > 0 ? (height / width) : 0;
+        const isReels = isReelsByAspect(width, height);
+        console.log(`[process-video] detect ${width}x${height} ratio=${ratio.toFixed(3)} route=${isReels ? "REELS" : "SQUARE"}`);
+
+        if (isReels) {
+            const cmdOverlayReels = `"${ffmpegPath}" -y -threads 1 -i "${bgImage}" -i "${inputFile}" -filter_complex "[0:v]scale=1080:1080[bg];[1:v]scale=-2:800[vid];[bg][vid]overlay=(W-w)/2:${top}:format=auto[out]" -map "[out]" -map 1:a -c:v libx264 -crf 23 -preset ultrafast -c:a mp3 -b:a 128k "${finalFile}"`;
+            console.log(`[ffmpeg][REELS] ${cmdOverlayReels}`);
+            await run(cmdOverlayReels);
+
+            const finalBase64 = fs.readFileSync(finalFile).toString("base64");
+            const url = `${req.protocol}://${req.get("host")}/output/${path.basename(finalFile)}`;
+            [inputFile, croppedFile].forEach(f => { if (fs.existsSync(f)) fs.unlinkSync(f); });
+            return res.json({ url, base64: finalBase64 });
+        }
+
         let videoSource = inputFile;
         if (isCut) {
             await smartCrop(inputFile, croppedFile, debug);
@@ -100,6 +140,7 @@ app.post("/process-video", async (req, res) => {
         }
         
         const cmdOverlay = `"${ffmpegPath}" -y -threads 1 -i "${bgImage}" -i "${videoSource}" -filter_complex "[0:v]scale=1080:1080[bg];[1:v]scale=800:800[vid];[bg][vid]overlay=(W-w)/2:${top}:format=auto[out]" -map "[out]" -map 1:a -c:v libx264 -crf 23 -preset ultrafast -c:a mp3 -b:a 128k "${finalFile}"`;
+        console.log(`[ffmpeg][SQUARE] ${cmdOverlay}`);
         await run(cmdOverlay);
 
         const finalBase64 = fs.readFileSync(finalFile).toString("base64");
@@ -108,6 +149,7 @@ app.post("/process-video", async (req, res) => {
         [inputFile, croppedFile].forEach(f => { if (fs.existsSync(f)) fs.unlinkSync(f); });
         return res.json({ url, base64: finalBase64 });
     } catch (e) {
+        logError("process-video", e);
         [inputFile, croppedFile, finalFile].forEach(f => { if (f && fs.existsSync(f)) fs.unlinkSync(f); });
         return res.status(500).send("Erro");
     }
@@ -162,8 +204,11 @@ app.post("/tucano", async (req, res) => {
         [tmpFrames, tmpWithText].forEach(f => { if (fs.existsSync(f)) fs.unlinkSync(f); });
         return res.json({ url: `${req.protocol}://${req.get("host")}/output/${path.basename(finalFile)}`, base64 });
     } catch (e) {
+        logError("tucano", e);
         return res.status(500).send("Erro");
     }
 });
 
-app.listen(PORT);
+app.listen(PORT, () => {
+    console.log(`Servidor rodando na porta ${PORT}`);
+});
