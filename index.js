@@ -64,6 +64,32 @@ function generateUniqueName(base = "video") {
     return `${base}-${crypto.randomBytes(4).toString("hex")}`;
 }
 
+function keepOnlyLatestFiles(dir, maxFiles = 8) {
+    if (!fs.existsSync(dir)) return;
+    const files = fs.readdirSync(dir)
+        .map(name => {
+            const fullPath = path.join(dir, name);
+            const stat = fs.statSync(fullPath);
+            return {
+                fullPath,
+                isFile: stat.isFile(),
+                createdAt: stat.birthtimeMs || stat.mtimeMs
+            };
+        })
+        .filter(item => item.isFile)
+        .sort((a, b) => b.createdAt - a.createdAt);
+
+    if (files.length <= maxFiles) return;
+    files.slice(maxFiles).forEach(file => {
+        try {
+            fs.unlinkSync(file.fullPath);
+            console.log(`[cleanup] removido: ${path.basename(file.fullPath)}`);
+        } catch (e) {
+            logError("cleanup", e);
+        }
+    });
+}
+
 async function saveBase64Video(base64, filepath) {
     const buffer = Buffer.from(base64, "base64");
     fs.writeFileSync(filepath, buffer);
@@ -129,6 +155,7 @@ app.post("/process-video", async (req, res) => {
 
             const finalBase64 = fs.readFileSync(finalFile).toString("base64");
             const url = `${req.protocol}://${req.get("host")}/output/${path.basename(finalFile)}`;
+            keepOnlyLatestFiles(DIRS.output, 8);
             [inputFile, croppedFile].forEach(f => { if (fs.existsSync(f)) fs.unlinkSync(f); });
             return res.json({ url, base64: finalBase64 });
         }
@@ -145,6 +172,7 @@ app.post("/process-video", async (req, res) => {
 
         const finalBase64 = fs.readFileSync(finalFile).toString("base64");
         const url = `${req.protocol}://${req.get("host")}/output/${path.basename(finalFile)}`;
+        keepOnlyLatestFiles(DIRS.output, 8);
         
         [inputFile, croppedFile].forEach(f => { if (fs.existsSync(f)) fs.unlinkSync(f); });
         return res.json({ url, base64: finalBase64 });
@@ -201,6 +229,7 @@ app.post("/tucano", async (req, res) => {
         await run(`"${ffmpegPath}" -y -threads 1 -i "${tmpWithText}" -i "${audioFile}" -c:v copy -c:a aac -b:a 128k -t 15 "${finalFile}"`);
         
         const base64 = fs.readFileSync(finalFile).toString("base64");
+        keepOnlyLatestFiles(DIRS.output, 8);
         [tmpFrames, tmpWithText].forEach(f => { if (fs.existsSync(f)) fs.unlinkSync(f); });
         return res.json({ url: `${req.protocol}://${req.get("host")}/output/${path.basename(finalFile)}`, base64 });
     } catch (e) {
