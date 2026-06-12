@@ -140,6 +140,7 @@ app.post("/process-video", async (req, res) => {
     const croppedFile = path.join(DIRS.temp, `${uniqueName}-cr.mp4`);
     const finalFile = path.join(DIRS.output, `${uniqueName}-out.mp4`);
     const bgImage = path.join(DIRS.img, text1);
+    const storyBgImage = path.join(DIRS.img, "background-story.png");
 
     try {
         await saveBase64Video(data, inputFile);
@@ -149,7 +150,7 @@ app.post("/process-video", async (req, res) => {
         console.log(`[process-video] detect ${width}x${height} ratio=${ratio.toFixed(3)} route=${isReels ? "REELS" : "SQUARE"}`);
 
         if (isReels) {
-            const cmdOverlayReels = `"${ffmpegPath}" -y -threads 1 -i "${bgImage}" -i "${inputFile}" -filter_complex "[0:v]scale=1080:1080[bg];[1:v]scale=-2:800[vid];[bg][vid]overlay=(W-w)/2:${top}:format=auto[out]" -map "[out]" -map 1:a -c:v libx264 -crf 23 -preset ultrafast -c:a mp3 -b:a 128k "${finalFile}"`;
+            const cmdOverlayReels = `"${ffmpegPath}" -y -threads 1 -i "${storyBgImage}" -i "${inputFile}" -filter_complex "[0:v]scale=1080:1920[bg];[1:v]scale=938:1800:force_original_aspect_ratio=decrease[vid];[bg][vid]overlay=(W-w)/2:(H-h)/2:format=auto[out]" -map "[out]" -map 1:a -c:v libx264 -crf 23 -preset ultrafast -c:a mp3 -b:a 128k "${finalFile}"`;
             console.log(`[ffmpeg][REELS] ${cmdOverlayReels}`);
             await run(cmdOverlayReels);
 
