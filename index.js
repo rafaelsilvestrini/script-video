@@ -96,14 +96,14 @@ async function saveBase64Video(base64, filepath) {
 }
 
 async function overlayOnBG(videoFile, bgFile, outputFile, topCrop) {
-    const cmd = `"${ffmpegPath}" -y -threads 1 -i "${bgImage}" -i "${videoFile}" -filter_complex "[0:v]scale=1080:1080[bg];[1:v]scale=800:800[vid];[bg][vid]overlay=(W-w)/2:${topCrop}:format=auto[out]" -map "[out]" -map 1:a -c:v libx264 -crf 23 -preset ultrafast -c:a mp3 -b:a 128k "${outputFile}"`;
+    const cmd = `"${ffmpegPath}" -y -threads 1 -i "${bgFile}" -i "${videoFile}" -filter_complex "[0:v]scale=1080:1080[bg];[1:v]scale=800:800[vid];[bg][vid]overlay=(W-w)/2:${topCrop}:format=auto[out]" -map "[out]" -map 1:a? -c:v libx264 -crf 23 -preset ultrafast -c:a mp3 -b:a 128k "${outputFile}"`;
     await run(cmd);
 }
 
 async function smartCrop(inputFile, outputFile, debug = false) {
     const probeCmd = `"${ffmpegPath}" -i "${inputFile}"`;
     const { stderr: probeData } = await run(probeCmd).catch(e => e);
-    const dimMatch = probeData.match(/(\d+)x(\d+)/);
+    const dimMatch = probeData.match(/Video:.*?(\d{2,5})x(\d{2,5})/);
     const width = dimMatch ? Number(dimMatch[1]) : 0;
     const height = dimMatch ? Number(dimMatch[2]) : 0;
 
@@ -150,7 +150,7 @@ app.post("/process-video", async (req, res) => {
         console.log(`[process-video] detect ${width}x${height} ratio=${ratio.toFixed(3)} route=${isReels ? "REELS" : "SQUARE"}`);
 
         if (isReels) {
-            const cmdOverlayReels = `"${ffmpegPath}" -y -threads 1 -i "${storyBgImage}" -i "${inputFile}" -filter_complex "[0:v]scale=1080:1920[bg];[1:v]scale=938:1800:force_original_aspect_ratio=decrease[vid];[bg][vid]overlay=(W-w)/2:(H-h)/2:format=auto[out]" -map "[out]" -map 1:a -c:v libx264 -crf 23 -preset ultrafast -c:a mp3 -b:a 128k "${finalFile}"`;
+            const cmdOverlayReels = `"${ffmpegPath}" -y -threads 1 -i "${storyBgImage}" -i "${inputFile}" -filter_complex "[0:v]scale=1080:1920[bg];[1:v]scale=938:1800:force_original_aspect_ratio=decrease[vid];[bg][vid]overlay=(W-w)/2:(H-h)/2:format=auto[out]" -map "[out]" -map 1:a? -c:v libx264 -crf 23 -preset ultrafast -c:a mp3 -b:a 128k "${finalFile}"`;
             console.log(`[ffmpeg][REELS] ${cmdOverlayReels}`);
             await run(cmdOverlayReels);
 
@@ -167,7 +167,7 @@ app.post("/process-video", async (req, res) => {
             videoSource = croppedFile;
         }
         
-        const cmdOverlay = `"${ffmpegPath}" -y -threads 1 -i "${bgImage}" -i "${videoSource}" -filter_complex "[0:v]scale=1080:1080[bg];[1:v]scale=800:800[vid];[bg][vid]overlay=(W-w)/2:${top}:format=auto[out]" -map "[out]" -map 1:a -c:v libx264 -crf 23 -preset ultrafast -c:a mp3 -b:a 128k "${finalFile}"`;
+        const cmdOverlay = `"${ffmpegPath}" -y -threads 1 -i "${bgImage}" -i "${videoSource}" -filter_complex "[0:v]scale=1080:1080[bg];[1:v]scale=800:800[vid];[bg][vid]overlay=(W-w)/2:${top}:format=auto[out]" -map "[out]" -map 1:a? -c:v libx264 -crf 23 -preset ultrafast -c:a mp3 -b:a 128k "${finalFile}"`;
         console.log(`[ffmpeg][SQUARE] ${cmdOverlay}`);
         await run(cmdOverlay);
 
