@@ -28,6 +28,10 @@ test('real FFmpeg: landscape, portrait and anamorphic sources preserve visible p
         assert.match(metadata.stderr, /Video: h264[^\r\n]*\byuv420p\b/, name + ' encoded pixel format');
         const { stdout: frame } = await execFileAsync(executable, ['-nostdin', '-v', 'error', '-i', output, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { encoding: 'buffer', maxBuffer: 8 * 1024 * 1024, windowsHide: true });
         assert.equal(frame.length, 1080 * 1080 * 3, name + ' canvas');
+        const paddingPixel = (200 * 1080 + 200) * 3;
+        for (const [channel, expected] of [18, 24, 39].entries()) {
+            assert.ok(Math.abs(frame[paddingPixel + channel] - expected) <= 5, name + ' navy padding');
+        }
         let minX = 1080, minY = 1080, maxX = -1, maxY = -1;
         for (let y = 0; y < 1080; y++) for (let x = 0; x < 1080; x++) {
             const i = (y * 1080 + x) * 3;

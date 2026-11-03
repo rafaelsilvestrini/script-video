@@ -45,11 +45,11 @@ test('tucano allows literal hostile text but rejects type/bound/filter injection
     for (const input of [{ text: {} }, { text1: 1 }, { text: 'a'.repeat(4001) }, { text: 'a\0b' }, { top: '20' }, { marginLeft: -1 }, { maxCharsPerLine: 0 }, { maxCharsPerLine: Infinity }, { text: 'a '.repeat(121), maxCharsPerLine: 1 }]) assert.throws(() => tools.validateTucano(input), { status: 400 });
     assert.deepEqual(tools.splitText('um dois tres', 7), ['um dois', 'tres']);
 });
-test('square filter fits source DAR into unchanged white 800 box and bounds top', () => {
+test('square filter fits source DAR into unchanged navy 800 box and bounds top', () => {
     const filter = tools.squareFilter(110);
     assert.match(filter, /800\*dar/);
     assert.match(filter, /800\/dar/);
-    assert.match(filter, /setsar=1,pad=800:800:\(ow-iw\)\/2:\(oh-ih\)\/2:white/);
+    assert.match(filter, /setsar=1,pad=800:800:\(ow-iw\)\/2:\(oh-ih\)\/2:0x121827/);
     assert.match(filter, /overlay=\(W-w\)\/2:110:format=auto/);
     assert.throws(() => tools.squareFilter('110'), { status: 400 });
     const args = tools.overlayArgs('video & x.mp4', 'background.png', 'output.mp4', filter);

@@ -3,7 +3,7 @@ const path = require('node:path');
 const { execFile } = require('node:child_process');
 
 const MAX_VIDEO_BYTES = 350 * 1024 * 1024;
-const SQUARE_FILTER = "[0:v]scale=1080:1080[bg];[1:v]scale=w='max(2,trunc(min(800,800*dar)/2)*2)':h='max(2,trunc(min(800,800/dar)/2)*2)',setsar=1,pad=800:800:(ow-iw)/2:(oh-ih)/2:white[vid];[bg][vid]overlay=(W-w)/2:TOP:format=auto[out]";
+const SQUARE_FILTER = "[0:v]scale=1080:1080[bg];[1:v]scale=w='max(2,trunc(min(800,800*dar)/2)*2)':h='max(2,trunc(min(800,800/dar)/2)*2)',setsar=1,pad=800:800:(ow-iw)/2:(oh-ih)/2:0x121827[vid];[bg][vid]overlay=(W-w)/2:TOP:format=auto[out]";
 
 function inputError(message) {
     const error = new Error(message);

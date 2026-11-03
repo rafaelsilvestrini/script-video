@@ -3,7 +3,7 @@
 Base: 129ca27d116b162db734281f692d2ac057f444e1.
 
 - Preservar POST /process-video e POST /tucano e resposta de sucesso { url, base64 }; arquivos continuam em /output.
-- Composição quadrada segue 1080×1080 e caixa de vídeo 800×800, centrada horizontalmente e posicionada por top. Conteúdo cabe inteiro na caixa com proporção visual preservada (incluindo SAR), sem esticar; espaço restante branco, coerente com smartCrop. Reels segue seleção e caixa atuais.
+- Composição quadrada segue 1080×1080 e caixa de vídeo 800×800, centrada horizontalmente e posicionada por top. Conteúdo cabe inteiro na caixa com proporção visual preservada (incluindo SAR), sem esticar. O espaço restante era branco no contrato inicial; a fatia visual aprovada posteriormente muda apenas essa cor e a de smartCrop para navy #121827. Reels segue seleção e caixa atuais.
 - FFmpeg executado diretamente com vetor de argumentos, sem shell. Texto Tucano deve ser lido de arquivos temporários, sem interpolar texto em expressões FFmpeg.
 - Validar corpo, tipos, limites numéricos, base64 canônico (até 350 MiB decodificados), nomes de fundo confinados a assets/img e arquivos de imagem existentes. Rejeições de entrada retornam 400 JSON { error }; erro de processamento mantém 500 Erro.
 - top de process-video: inteiro 0–280 (caixa 800 alta em canvas 1080). Tucano: strings até 4000 caracteres cada; marginLeft e top inteiros 0–1080/1920; maxCharsPerLine inteiro 1–200. Defaults existentes mantidos.

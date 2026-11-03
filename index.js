@@ -95,7 +95,7 @@ async function smartCrop(inputFile, outputFile, debugFile) {
         dY = Math.floor(height * 0.20); dH = Math.floor(height * 0.60); dX = 0; dW = width;
     }
     const maxSide = Math.max(dW, dH);
-    const filter = `crop=${dW}:${dH}:${dX}:${dY},pad=${maxSide}:${maxSide}:(ow-iw)/2:(oh-ih)/2:white`;
+    const filter = `crop=${dW}:${dH}:${dX}:${dY},pad=${maxSide}:${maxSide}:(ow-iw)/2:(oh-ih)/2:0x121827`;
     if (debugFile) await run(['-y', '-i', inputFile, '-ss', '1', '-vf', `drawbox=x=${dX}:y=${dY}:w=${dW}:h=${dH}:color=red:t=5`, '-vframes', '1', debugFile]);
     await run(['-y', '-threads', '1', '-i', inputFile, '-vf', filter, '-c:v', 'libx264', '-crf', '23', '-preset', 'ultrafast', '-c:a', 'copy', outputFile]);
 }
