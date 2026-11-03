@@ -58,3 +58,11 @@ Anéis com stroke3px, lima#D5FF55 e opacidade0,65 ocupam áreas externas e ficam
 Prévia da foto real: como Downloads continha a própria imagem já processada, a janela940² em x70/y110 foi recuperada apenas para esta demonstração, preservando integralmente seu texto/fotos. Não se propõe usar esse recorte em produção: o endpoint continua recebendo a imagem original. Uma recompressão adicional da prévia não é evidência de perda na origem.
 
 Validação: renderização determinística com resvg2.6.2, teste de hash do logo original, proporções/cantos em16:9/1:1/9:16 e testes reais do endpoint. O refinamento permanece local até revisão e sincronização pelo coordenador; nenhum novo deploy foi executado pelo agente visual.
+
+## Refinamento leve de balões e arcos — candidato sobre produção7e29193
+
+Após a publicação dos anéis finos, a referência visual do usuário esclareceu a linguagem desejada: balões de conversa e arcos arredondados semelhantes à capa do Facebook, preservando o fundo navy e o alinhamento já aprovado. Esta revisão troca os anéis por dois balões contornados à esquerda e arcos com terminação arredondada no alto/direita inferior. Traços4–5px nos balões e10px nos arcos, opacidade0,34–0,48, sem texto adicional.
+
+Quadrado: balão superior contido em x12–56 antes do stroke e balão inferior parcial atéx43; a janela começa emx70. Arcos inferiores direitos começam emx1034 (stroke atéx1029), depois da borda da imagemx1010. Reels aplica a mesma linguagem em alturas adequadas ao canvas1920. A faixa branca do topo continua acima da decoração. Logo original, x70do cartucho quadrado, x71do viewport/tinta Reels, dimensões e janela de conteúdo preservados.
+
+Alteração somente nos quatro assets SVG/PNG e nesta documentação. Sem chamadas de IA, sem mudança no runtime ou cache. Testes de templates/hash e renders com os quatro cantos reaproveitam a mesma infraestrutura validada. O coordenador fará a revisão visual local deste ajuste cosmético e a sincronização; o agente visual não executou commit ou deploy.
