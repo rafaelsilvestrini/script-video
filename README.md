@@ -2,6 +2,10 @@
 
 API Express para compor vídeos com FFmpeg. A melhoria local preserva as rotas e a resposta `{ url, base64 }`. A composição quadrada mantém canvas 1080×1080 e caixa 800×800; o vídeo cabe inteiro, sem deformação, com espaço branco quando necessário. A posição vertical da caixa continua controlada por `top`.
 
+Os MP4 finais usam H.264 com pixels `yuv420p` (4:2:0), áudio AAC a 128 kb/s, 48 kHz e dois canais quando houver áudio, e `+faststart` para colocar o índice `moov` antes da mídia. Vídeos de entrada sem áudio continuam sem faixa de áudio. O encode de texto de Tucano também fixa `yuv420p`, e o MP4 final usa AAC e faststart. Dimensões, layout, duração e contratos das rotas são preservados. Essas opções atendem a esses requisitos de compatibilidade; não comprovam todos os limites nem a aceitação pelas plataformas.
+
+Referências: [amostra oficial Meta para publicação de Reels](https://github.com/fbsamples/reels_publishing_apis/blob/main/insta_reels_publishing_api_sample/README.md#reels-requirements-for-publishing), [FFmpeg: formato de pixels](https://ffmpeg.org/ffmpeg.html#Advanced-Video-options), [FFmpeg: faststart](https://ffmpeg.org/ffmpeg-formats.html#mov_002c-mp4_002c-ismv).
+
 ## Contratos
 
 - `POST /process-video`: JSON com `data` (base64 puro e canônico, até 350 MiB decodificados), `top` (inteiro 0–280, padrão 110), `text1` (nome de imagem existente diretamente em `assets/img`, padrão `back.png`), `isCut` e `debug` (booleanos, padrão false). Nomes permitidos usam letras, números, `_`, `-` e extensão png/jpg/jpeg/webp. Imagens ausentes ou links para fora de `assets/img` são rejeitados. A seleção de Reels e seu layout permanecem como antes; `top` e fundo escolhido afetam o ramo quadrado.

@@ -75,7 +75,7 @@ function squareFilter(top) {
     return SQUARE_FILTER.replace('TOP', String(top));
 }
 function overlayArgs(video, background, output, filter) {
-    return ['-y', '-threads', '1', '-i', background, '-i', video, '-filter_complex', filter, '-map', '[out]', '-map', '1:a?', '-c:v', 'libx264', '-crf', '23', '-preset', 'ultrafast', '-c:a', 'mp3', '-b:a', '128k', output];
+    return ['-y', '-threads', '1', '-i', background, '-i', video, '-filter_complex', filter, '-map', '[out]', '-map', '1:a?', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '23', '-preset', 'ultrafast', '-c:a', 'aac', '-b:a', '128k', '-ar', '48000', '-ac', '2', '-movflags', '+faststart', output];
 }
 function filterPath(filename) {
     return filename.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "'\\''");

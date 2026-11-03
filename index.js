@@ -170,9 +170,9 @@ app.post('/tucano', async (req, res) => {
             const filterFile = path.join(DIRS.temp, `${name}-filters.txt`);
             textFiles.push(filterFile);
             fs.writeFileSync(filterFile, filters.join(','), 'utf8');
-            await run(['-y', '-threads', '1', '-i', tmpFrames, '-filter_script:v', filterFile, '-c:v', 'libx264', '-crf', '23', '-preset', 'ultrafast', tmpWithText]);
+            await run(['-y', '-threads', '1', '-i', tmpFrames, '-filter_script:v', filterFile, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '23', '-preset', 'ultrafast', tmpWithText]);
         } else fs.copyFileSync(tmpFrames, tmpWithText);
-        await run(['-y', '-threads', '1', '-i', tmpWithText, '-i', path.join(DIRS.audio, 'tucano.mp3'), '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k', '-t', '15', finalFile]);
+        await run(['-y', '-threads', '1', '-i', tmpWithText, '-i', path.join(DIRS.audio, 'tucano.mp3'), '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k', '-ar', '48000', '-ac', '2', '-movflags', '+faststart', '-t', '15', finalFile]);
         return respondVideo(req, res, finalFile);
     } catch (error) {
         logError('tucano', error);
