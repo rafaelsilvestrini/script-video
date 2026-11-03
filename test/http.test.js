@@ -35,7 +35,7 @@ test('real HTTP parser rejects malformed/oversized JSON with fixed JSON errors a
     };
     express.static = realExpress.static;
     express.json = options => {
-        assert.equal(options.limit, '500mb', 'production limit is unchanged');
+        assert.ok(['500mb', '15mb'].includes(options.limit), 'image and video limits remain bounded');
         // Exercise the actual Express/body-parser oversized-body branch with a
         // small fixture; never allocate or transmit a 500 MiB test request.
         return realExpress.json({ ...options, limit: '128b' });
@@ -44,7 +44,7 @@ test('real HTTP parser rejects malformed/oversized JSON with fixed JSON errors a
         __dirname: root,
         process: { env: { FFMPEG_PATH: 'not-executed', OUTPUT_TTL_HOURS: '1' } },
         console: { log() {}, error(...args) { logs.push(args); } },
-        require: name => name === 'express' ? express : name === 'cors' ? realCors : name === './video-tools' ? require('../video-tools') : require(name)
+        require: name => name === 'express' ? express : name === 'cors' ? realCors : name === './video-tools' ? require('../video-tools') : name === './image-route' ? require('../image-route') : require(name)
     };
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../index.js'), 'utf8'), sandbox);
     if (!server.listening) await new Promise(resolve => server.once('listening', resolve));
@@ -59,7 +59,7 @@ test('real HTTP parser rejects malformed/oversized JSON with fixed JSON errors a
             req.end(body);
         });
     }
-    for (const route of ['/process-video', '/tucano']) {
+    for (const route of ['/process-video', '/tucano', '/process-image']) {
         const malformed = await request(route, '{"private-marker":"confidential-value",');
         assert.equal(malformed.status, 400);
         assert.match(malformed.type, /^application\/json/);

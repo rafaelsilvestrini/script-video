@@ -3,7 +3,7 @@ const path = require('node:path');
 const { execFile } = require('node:child_process');
 
 const MAX_VIDEO_BYTES = 350 * 1024 * 1024;
-const SQUARE_FILTER = "[0:v]scale=1080:1080[bg];[1:v]scale=w='max(2,trunc(min(800,800*dar)/2)*2)':h='max(2,trunc(min(800,800/dar)/2)*2)',setsar=1,pad=800:800:(ow-iw)/2:(oh-ih)/2:0x121827[vid];[bg][vid]overlay=(W-w)/2:TOP:format=auto[out]";
+const SQUARE_FILTER = "[0:v]scale=1080:1080[bg];[1:v]scale=w='max(2,trunc(min(BOX,BOX*dar)/2)*2)':h='max(2,trunc(min(BOX,BOX/dar)/2)*2)',setsar=1,pad=BOX:BOX:(ow-iw)/2:(oh-ih)/2:0x121827[vid];[bg][vid]overlay=(W-w)/2:TOP:format=auto[out]";
 
 function inputError(message) {
     const error = new Error(message);
@@ -70,9 +70,12 @@ function runFfmpeg(ffmpegPath, args) {
         });
     });
 }
-function squareFilter(top) {
+function squareFilter(top, requestedBox = 800) {
     integer(top, 'top', 0, 280);
-    return SQUARE_FILTER.replace('TOP', String(top));
+    integer(requestedBox, 'requestedBox', 800, 940);
+    // Keep the full source inside the canvas even with legacy custom top values.
+    const box = Math.floor(Math.min(requestedBox, 1080 - top) / 2) * 2;
+    return SQUARE_FILTER.replaceAll('BOX', String(box)).replace('TOP', String(top));
 }
 function overlayArgs(video, background, output, filter) {
     return ['-y', '-threads', '1', '-i', background, '-i', video, '-filter_complex', filter, '-map', '[out]', '-map', '1:a?', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '23', '-preset', 'ultrafast', '-c:a', 'aac', '-b:a', '128k', '-ar', '48000', '-ac', '2', '-movflags', '+faststart', output];

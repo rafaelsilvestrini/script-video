@@ -20,6 +20,7 @@ function harness(t, { failRender = false } = {}) {
     const app = {
         use(...args) { if (args[0] === '/output') outputMiddleware = args[1]; },
         post(route, handler) { handlers.set(route, handler); },
+        get() {},
         listen() {}
     };
     const express = () => app;
@@ -45,7 +46,7 @@ function harness(t, { failRender = false } = {}) {
         __dirname: root,
         process: { env: { FFMPEG_PATH: 'synthetic-ffmpeg', OUTPUT_TTL_HOURS: '1' } },
         console: { log() {}, error() {} },
-        require: name => name === 'express' ? express : name === 'cors' ? () => () => {} : name === './video-tools' ? localTools : require(name)
+        require: name => name === 'express' ? express : name === 'cors' ? () => () => {} : name === './video-tools' ? localTools : name === './image-route' ? require('../image-route') : require(name)
     };
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../index.js'), 'utf8'), sandbox);
     async function request(route, body) {
@@ -71,7 +72,7 @@ test('process route keeps success response/url/base64 and cleans per-request tem
     assert.equal(Buffer.from(response.body.base64, 'base64').toString(), 'synthetic-result');
     assert.equal(fs.readdirSync(path.join(h.root, 'temp_videos')).length, 0);
     assert.equal(fs.readdirSync(path.join(h.root, 'output')).length, 1);
-    assert.ok(h.calls.some(args => args.some(arg => arg.includes('pad=800:800'))));
+    assert.ok(h.calls.some(args => args.some(arg => arg.includes('pad=940:940'))));
 });
 test('invalid requests fail before FFmpeg and processing failure removes partial output', async t => {
     const h = harness(t, { failRender: true });

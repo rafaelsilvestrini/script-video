@@ -19,8 +19,8 @@ const report = [];
 async function main() {
     const font = filterPath(path.join(repo, 'assets/fonts/HelveticaNeueMedium.otf'));
     for (const spec of [
-        { name: 'quadrado-16x9', w: 640, h: 360, contentW: 800, contentH: 450, x: 140, y: 285, canvasH: 1080 },
-        { name: 'quadrado-1x1', w: 640, h: 640, contentW: 800, contentH: 800, x: 140, y: 110, canvasH: 1080 },
+        { name: 'quadrado-16x9', w: 640, h: 360, contentW: 940, contentH: 528, x: 70, y: 316, canvasH: 1080 },
+        { name: 'quadrado-1x1', w: 640, h: 640, contentW: 940, contentH: 940, x: 70, y: 110, canvasH: 1080 },
         { name: 'story-9x16', w: 720, h: 1280, contentW: 938, contentH: 1668, x: 71, y: 126, canvasH: 1920 }
     ]) {
         const input = path.join(temp, spec.name + '.mp4');
@@ -37,7 +37,7 @@ async function main() {
         ];
         await runFfmpeg(executable, ['-y', '-f', 'lavfi', '-i', `color=0x667080:s=${spec.w}x${spec.h}:r=24:d=1`, '-vf', filters.join(','), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', input]);
         const reels = spec.canvasH === 1920;
-        const filter = reels ? '[0:v]scale=1080:1920[bg];[1:v]scale=938:1800:force_original_aspect_ratio=decrease[vid];[bg][vid]overlay=(W-w)/2:(H-h)/2:format=auto[out]' : squareFilter(110);
+        const filter = reels ? '[0:v]scale=1080:1920[bg];[1:v]scale=938:1800:force_original_aspect_ratio=decrease[vid];[bg][vid]overlay=(W-w)/2:(H-h)/2:format=auto[out]' : squareFilter(110, 940);
         await runFfmpeg(executable, overlayArgs(input, path.join(backgrounds, reels ? 'background-story.png' : 'back.png'), output, filter));
         const { stdout: frame } = await execFileAsync(executable, ['-nostdin', '-v', 'error', '-i', output, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { encoding: 'buffer', maxBuffer: 10 * 1024 * 1024, windowsHide: true });
         assert.equal(frame.length, 1080 * spec.canvasH * 3);

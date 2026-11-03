@@ -103,3 +103,10 @@ test('cleanup preserves >8 fresh outputs, active old files, foreign files and di
     for (const name of [...names.map(n => path.join(dir, n)), active, foreign, directory]) assert.equal(fs.existsSync(name), true, name);
     for (const name of [expired, legacy, debug]) assert.equal(fs.existsSync(name), false, name);
 });
+
+test('expanded Observei box preserves canvas bounds at legacy top extremes', () => {
+    assert.match(tools.squareFilter(110, 940), /pad=940:940/);
+    assert.match(tools.squareFilter(280, 940), /pad=800:800/);
+    assert.match(tools.squareFilter(141, 940), /pad=938:938/);
+    assert.throws(() => tools.squareFilter(110, 1000), { status: 400 });
+});

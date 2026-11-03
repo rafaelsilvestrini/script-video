@@ -16,14 +16,14 @@ test('real FFmpeg: landscape, portrait and anamorphic sources preserve visible p
     const background = path.join(root, 'background.bmp');
     await runFfmpeg(executable, ['-y', '-f', 'lavfi', '-i', 'color=black:s=1080x1080', '-frames:v', '1', background]);
     for (const [name, size, sar, expectedW, expectedH] of [
-        ['landscape', '640x360', '1', 800, 450],
-        ['portrait', '360x640', '1', 450, 800],
-        ['anamorphic', '320x360', '2', 800, 450]
+        ['landscape', '640x360', '1', 940, 528],
+        ['portrait', '360x640', '1', 528, 940],
+        ['anamorphic', '320x360', '2', 940, 528]
     ]) {
         const input = path.join(root, name + '.mp4');
         const output = path.join(root, name + '-out.mp4');
         await runFfmpeg(executable, ['-y', '-f', 'lavfi', '-i', `color=red:s=${size}:r=2:d=1`, '-vf', `setsar=${sar}`, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', input]);
-        await runFfmpeg(executable, overlayArgs(input, background, output, squareFilter(110)));
+        await runFfmpeg(executable, overlayArgs(input, background, output, squareFilter(110, 940)));
         const metadata = await runFfmpeg(executable, ['-i', output]).catch(error => error);
         assert.match(metadata.stderr, /Video: h264[^\r\n]*\byuv420p\b/, name + ' encoded pixel format');
         const { stdout: frame } = await execFileAsync(executable, ['-nostdin', '-v', 'error', '-i', output, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { encoding: 'buffer', maxBuffer: 8 * 1024 * 1024, windowsHide: true });
@@ -43,7 +43,7 @@ test('real FFmpeg: landscape, portrait and anamorphic sources preserve visible p
         assert.ok(Math.abs(maxX - minX + 1 - expectedW) <= 4, `${name} content width ${maxX - minX + 1}`);
         assert.ok(Math.abs(maxY - minY + 1 - expectedH) <= 4, `${name} content height ${maxY - minY + 1}`);
         assert.ok(Math.abs((minX + maxX) / 2 - 539.5) <= 2, name + ' horizontal center');
-        assert.ok(minY >= 110 && maxY < 910, name + ' original 800px box/top');
+        assert.ok(minY >= 110 && maxY < 1050, name + ' expanded 940px box/top');
     }
 });
 test('real FFmpeg: Tucano renders punctuation and disables expression expansion (pixel comparison)', { skip: !executable && 'set FFMPEG_PATH to a trusted local FFmpeg' }, async t => {
@@ -87,7 +87,7 @@ test('real FFmpeg: final square/Reels MP4 uses 4:2:0, optional AAC and front-loa
         await runFfmpeg(executable, inputArgs);
         for (const reels of [false, true]) {
             const output = path.join(root, `output-${withAudio}-${reels}.mp4`);
-            const filter = reels ? '[0:v]scale=1080:1920[bg];[1:v]scale=938:1800:force_original_aspect_ratio=decrease[vid];[bg][vid]overlay=(W-w)/2:(H-h)/2:format=auto[out]' : squareFilter(110);
+            const filter = reels ? '[0:v]scale=1080:1920[bg];[1:v]scale=938:1800:force_original_aspect_ratio=decrease[vid];[bg][vid]overlay=(W-w)/2:(H-h)/2:format=auto[out]' : squareFilter(110, 940);
             await runFfmpeg(executable, overlayArgs(input, background, output, filter));
             const { stderr } = await runFfmpeg(executable, ['-i', output]).catch(error => error);
             assert.match(stderr, /Video: h264[^\r\n]*\byuv420p\b/);

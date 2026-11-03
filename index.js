@@ -3,6 +3,7 @@ const cors = require('cors');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { createImageHandler, createImageCache, createImageDownloadHandler } = require('./image-route');
 const { validateProcess, validateTucano, splitText, runFfmpeg, squareFilter, overlayArgs, filterPath, ttlMilliseconds, outputKey, cleanupExpired } = require('./video-tools');
 
 const app = express();
@@ -40,6 +41,7 @@ function removeFiles(files) {
     }
 }
 app.use(cors());
+app.use('/process-image', express.json({ limit: '15mb' }));
 app.use(express.json({ limit: '500mb' }));
 app.use((error, req, res, next) => {
     // Parser errors can contain a copy of the request body and a stack trace.
@@ -65,6 +67,9 @@ app.use('/output', (req, res, next) => {
     res.once('close', release);
     next();
 }, express.static(DIRS.output));
+const imageCache = createImageCache({ publicBaseUrl: process.env.IMAGE_PUBLIC_BASE_URL });
+app.get('/image-output/:token.jpg', createImageDownloadHandler(imageCache));
+app.post('/process-image', createImageHandler({ ffmpegPath, tempDir: DIRS.temp, imageDir: DIRS.img, cache: imageCache }));
 const run = args => runFfmpeg(ffmpegPath, args);
 function logError(context, error) {
     // Do not log request bodies or text content. FFmpeg can echo filters/files.
@@ -127,7 +132,7 @@ app.post('/process-video', async (req, res) => {
                 await smartCrop(inputFile, croppedFile, input.debug ? debugFile : undefined);
                 videoSource = croppedFile;
             }
-            await run(overlayArgs(videoSource, input.bgImage, finalFile, squareFilter(input.top)));
+            await run(overlayArgs(videoSource, input.bgImage, finalFile, squareFilter(input.top, path.basename(input.bgImage) === 'back.png' ? 940 : 800)));
         }
         return respondVideo(req, res, finalFile);
     } catch (error) {
