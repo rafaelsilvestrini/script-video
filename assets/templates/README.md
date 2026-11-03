@@ -46,3 +46,15 @@ O Reels permanece938×1800, centrado e sem corte. A ampliação vertical fica pe
 Os renders sintéticos cobrem16:9,1:1,9:16, créditos e marcadores nos quatro cantos. Não comprovam retenção. Texto longo gravado na fonte continua exigindo alteração upstream.
 
 A candidata exige publicar código e `back.png` juntos após aceite. Reverter apenas o PNG não desfaz a geometria: reverter também a seleção940 na rota. Nenhum deploy foi executado nesta revisão local.
+
+## Refinamento visual — logo alinhado e anéis (candidato sobre produção630e3a2)
+
+O endpoint de imagens e a candidata B já foram publicados no commit630e3a2 pelo coordenador. Esta revisão posterior altera somente os dois SVGs e seus PNGs, além desta documentação: sem alteração de rotas, filtros de vídeo/foto, cache ou consumo de APIs.
+
+Quadrado: cartucho do logo agora x70/y20,280×72; viewport interno x86/y28,248×56. A borda esquerda do cartucho coincide com a janela940² da mídia em x70. Reels: viewport do logo agora x71/y10,200×40, alinhado à janela de938px em x71; mantém a proporção com `xMinYMid meet`, alinhando a tinta da marca à esquerda do viewport sem folga horizontal de centralização. O PNG original embutido mantém exatamente os mesmos bytes.
+
+Anéis com stroke3px, lima#D5FF55 e opacidade0,65 ocupam áreas externas e ficam atrás da mídia e da faixa da marca. As janelas de conteúdo não mudam; padding opaco existente continua protegendo o conteúdo, inclusive no formato16:9. Os dois pequenos quadrados do endpoint de foto permanecem como detalhes discretos. Os fundos são lidos do disco em cada processamento; a sincronização destes assets não exige reiniciar o processo nem apagar o cache de URLs de imagens.
+
+Prévia da foto real: como Downloads continha a própria imagem já processada, a janela940² em x70/y110 foi recuperada apenas para esta demonstração, preservando integralmente seu texto/fotos. Não se propõe usar esse recorte em produção: o endpoint continua recebendo a imagem original. Uma recompressão adicional da prévia não é evidência de perda na origem.
+
+Validação: renderização determinística com resvg2.6.2, teste de hash do logo original, proporções/cantos em16:9/1:1/9:16 e testes reais do endpoint. O refinamento permanece local até revisão e sincronização pelo coordenador; nenhum novo deploy foi executado pelo agente visual.
