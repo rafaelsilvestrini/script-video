@@ -92,15 +92,29 @@ function outputKey(filename, platform = process.platform) {
     return platform === 'win32' ? filename.toLowerCase() : filename;
 }
 function cleanupExpired(dir, ttl, active, now = Date.now()) {
+    const videos = [];
+    const images = [];
     for (const name of fs.readdirSync(dir)) {
         if (!/^(video|tucano)-[a-f0-9]{16}-(out|res|debug)\.(mp4|png)$/.test(name) && !/^(video|tucano)-[a-f0-9]{8}-(out|res)\.mp4$/.test(name)) continue;
         const filename = path.join(dir, name);
         if (active.has(outputKey(filename))) continue;
         try {
             const stat = fs.lstatSync(filename);
-            if (stat.isFile() && now - stat.mtimeMs >= ttl) fs.unlinkSync(filename);
+            if (!stat.isFile()) continue;
+            if (now - stat.mtimeMs >= ttl) {
+                fs.unlinkSync(filename);
+            } else {
+                (name.endsWith('.mp4') ? videos : images).push({ filename, modified: stat.mtimeMs });
+            }
         } catch (error) {
             if (error.code !== 'ENOENT') console.error('[cleanup] falha', error.code);
+        }
+    }
+    for (const files of [videos, images]) {
+        files.sort((a, b) => b.modified - a.modified || b.filename.localeCompare(a.filename));
+        for (const { filename } of files.slice(8)) {
+            try { fs.unlinkSync(filename); }
+            catch (error) { if (error.code !== 'ENOENT') console.error('[cleanup] falha', error.code); }
         }
     }
 }

@@ -86,12 +86,16 @@ test('Windows output activity uses case-insensitive keys', () => {
     assert.equal(tools.outputKey('C:\\Output\\VIDEO.mp4', 'win32'), tools.outputKey('c:\\output\\video.mp4', 'win32'));
     assert.notEqual(tools.outputKey('/output/VIDEO.mp4', 'linux'), tools.outputKey('/output/video.mp4', 'linux'));
 });
-test('cleanup preserves >8 fresh outputs, active old files, foreign files and directories', () => {
+test('cleanup retains eight newest outputs and preserves active files, foreign files and directories', () => {
     const dir = path.join(temp, 'outputs'); fs.mkdirSync(dir);
     const now = Date.now();
     const ttl = 3600000;
     const names = Array.from({ length: 12 }, (_, i) => `video-${i.toString(16).padStart(16, '0')}-out.mp4`);
-    for (const name of names) fs.writeFileSync(path.join(dir, name), 'fixture');
+    for (const [index, name] of names.entries()) {
+        const filename = path.join(dir, name);
+        fs.writeFileSync(filename, 'fixture');
+        fs.utimesSync(filename, new Date(now - index * 1000), new Date(now - index * 1000));
+    }
     const active = path.join(dir, 'video-aaaaaaaaaaaaaaaa-out.mp4');
     const expired = path.join(dir, 'video-bbbbbbbbbbbbbbbb-out.mp4');
     const legacy = path.join(dir, 'video-cccccccc-out.mp4');
@@ -100,8 +104,8 @@ test('cleanup preserves >8 fresh outputs, active old files, foreign files and di
     for (const name of [active, expired, legacy, debug, foreign]) { fs.writeFileSync(name, 'fixture'); fs.utimesSync(name, new Date(now - ttl * 2), new Date(now - ttl * 2)); }
     const directory = path.join(dir, 'video-eeeeeeeeeeeeeeee-out.mp4'); fs.mkdirSync(directory);
     tools.cleanupExpired(dir, ttl, new Map([[tools.outputKey(active), 1]]), now);
-    for (const name of [...names.map(n => path.join(dir, n)), active, foreign, directory]) assert.equal(fs.existsSync(name), true, name);
-    for (const name of [expired, legacy, debug]) assert.equal(fs.existsSync(name), false, name);
+    for (const name of [...names.slice(0, 8).map(n => path.join(dir, n)), active, foreign, directory]) assert.equal(fs.existsSync(name), true, name);
+    for (const name of [...names.slice(8).map(n => path.join(dir, n)), expired, legacy, debug]) assert.equal(fs.existsSync(name), false, name);
 });
 
 test('expanded Observei box preserves canvas bounds at legacy top extremes', () => {
