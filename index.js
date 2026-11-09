@@ -188,4 +188,8 @@ app.post('/tucano', async (req, res) => {
         release();
     }
 });
-app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+app.listen(PORT, () => {
+    cleanup();
+    setInterval(cleanup, 15 * 60 * 1000).unref();
+    console.log(`Servidor rodando na porta ${PORT}`);
+});
